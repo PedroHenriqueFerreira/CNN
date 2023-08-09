@@ -1,5 +1,6 @@
-from matrix import Matrix
+from typing import Literal
 
+from matrix import Matrix
 from optimizers import Optimizer
 
 class Layer:
@@ -50,8 +51,26 @@ class Dense(Layer):
         
         return input_gradient
 
+class Conv2D(Layer):
+    ''' Convolutional layer '''
+    
+    def __init__(
+        self, 
+        input_shape: tuple[int, int, int], 
+        kernel_shape: tuple[int, int], 
+        filters: int,
+        strides: int = 1,
+        padding: Literal['valid', 'same'] = 'valid'
+    ):
+        self.input_shape = input_shape
+        self.kernel_shape = kernel_shape
+        self.filters = filters
+        
+        self.strides = strides
+        self.padding = padding
+      
 class Activation(Layer):
-    ''' Activation layer '''
+    ''' Abstract class for activation layers '''
     
     def activation(self, x: Matrix) -> Matrix:
         ''' Return the activation of x '''
