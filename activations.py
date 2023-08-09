@@ -1,6 +1,6 @@
 from math import exp
 
-from layer import Activation
+from layers import Activation
 from matrix import Matrix
 
 class Identity(Activation):
