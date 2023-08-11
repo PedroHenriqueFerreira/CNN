@@ -3,11 +3,6 @@ from matrix import Matrix
 class Optimizer:
     ''' Base class for all optimizers '''
 
-    def __init__(self):
-        ''' Initialize the optimizer '''
-        
-        raise NotImplementedError()
-
     def copy(self) -> 'Optimizer':
         ''' Return a copy of the optimizer '''
         

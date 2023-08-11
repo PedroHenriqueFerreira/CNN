@@ -1,4 +1,4 @@
-from typing import Callable, Union
+from typing import Callable, Union, Literal
 from random import uniform
 
 class Matrix:
@@ -8,12 +8,12 @@ class Matrix:
         ''' Initialize a matrix with the given dimensions '''
         
         if rows <= 0 or cols <= 0:
-            raise ValueError('Matrix dimensions must be positive non-zero integers')
+            raise ValueError('Invalid matrix dimensions')
         
         self.rows = rows
         self.cols = cols
         
-        self.data = [[0.0] * cols for _ in range(rows)]
+        self.data: list[list[float]] = [[0] * cols for _ in range(rows)]
     
     def map(self, function: Callable[[float], float]) -> 'Matrix':
         ''' Apply a function to each element in the matrix by item '''
@@ -217,11 +217,80 @@ class Matrix:
                     matrix.data[i][j] += self.data[i][k] * other.data[k][j]
 
         return matrix
+    
+    @staticmethod
+    def join(*matrices: 'Matrix') -> 'Matrix':
+        ''' Join matrices along the specified axis '''
         
-    def __str__(self) -> str:
-        ''' Return a string representation of the matrix '''
+        if len(matrices) == 0:
+            raise ValueError('At least one matrix must be provided')
         
-        return str(self.data).replace('],', '],\n')
+        if len(set(matrix.cols for matrix in matrices)) > 1:
+            raise ValueError('Invalid matrix dimensions')
+    
+        data: list[list[float]] = []
+        
+        for matrix in matrices:
+            data.extend(matrix.data)
+            
+        return Matrix.load(data)
+               
+    @staticmethod
+    def correlate(
+        base: 'Matrix', 
+        kernel: 'Matrix', 
+        stride: int = 1, 
+        mode: Literal['valid', 'same', 'full'] = 'valid'
+    ) -> 'Matrix':
+        ''' Correlate the matrix with a kernel '''
+        
+        if kernel.rows > base.rows or kernel.cols > base.cols:
+            raise ValueError('Kernel must be smaller than the base matrix')
+        
+        match mode:
+            case 'valid':
+                v_pad = (0, 0)
+                h_pad = (0, 0)
+            
+            case 'same':
+                v_total_pad = (base.rows - 1) * stride - base.rows + kernel.rows
+                h_total_pad = (base.cols - 1) * stride - base.cols + kernel.cols
+                
+                v_pad = (v_total_pad // 2, v_total_pad - v_total_pad // 2)
+                h_pad = (h_total_pad // 2, h_total_pad - h_total_pad // 2)
+                
+            case 'full':
+                v_pad = (kernel.rows - 1, kernel.rows - 1)
+                h_pad = (kernel.cols - 1, kernel.cols - 1)
+        
+        rows = (base.rows + sum(v_pad) - kernel.rows) // stride + 1
+        cols = (base.cols + sum(h_pad) - kernel.cols) // stride + 1
+        
+        matrix = Matrix(rows, cols)
+        
+        base = base.expand(v_pad, h_pad)
+        
+        for i in range(matrix.rows):
+            for j in range(matrix.cols):
+                ii = i * stride
+                jj = j * stride
+                
+                base_part = [row[jj:jj + kernel.cols] for row in base.data[ii:ii + kernel.rows]]
+                
+                matrix.data[i][j] = (Matrix.load(base_part) * kernel).sum()
+        
+        return matrix
+    
+    @staticmethod
+    def convolve(
+        base: 'Matrix', 
+        kernel: 'Matrix', 
+        stride: int = 1, 
+        mode: Literal['valid', 'same', 'full'] = 'valid'
+    ) -> 'Matrix':
+        ''' Convolve the matrix with a kernel '''
+        
+        return Matrix.correlate(base, kernel.Rot180, stride, mode)
     
     @property
     def T(self) -> 'Matrix':
@@ -234,3 +303,42 @@ class Matrix:
                 matrix.data[j][i] = self.data[i][j]
                 
         return matrix
+    
+    @property
+    def Rot180(self) -> 'Matrix':
+        ''' Rotate the matrix by 180 degrees '''
+        
+        matrix = Matrix(self.rows, self.cols)
+        
+        for i in range(self.rows):
+            for j in range(self.cols):
+                matrix.data[i][j] = self.data[self.rows - i - 1][self.cols - j - 1]
+        
+        return matrix
+    
+    def expand(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
+        ''' Expand the matrix by adding rows and columns '''
+        
+        matrix = Matrix(self.rows + sum(vert), self.cols + sum(horiz))
+        
+        for i in range(vert[0], self.rows + vert[0]):
+            for j in range(horiz[0], self.cols + horiz[0]):
+                matrix.data[i][j] = self.data[i - vert[0]][j - horiz[0]]
+            
+        return matrix
+
+    def compress(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
+        ''' Compress the matrix by removing rows and columns '''
+        
+        matrix = Matrix(self.rows - sum(vert), self.cols - sum(horiz))
+        
+        for i in range(matrix.rows):
+            for j in range(matrix.cols):
+                matrix.data[i][j] = self.data[i + vert[0]][j + horiz[0]]
+
+        return matrix
+    
+    def __str__(self) -> str:
+        ''' Return a string representation of the matrix '''
+        
+        return str(self.data).replace('],', '],\n')

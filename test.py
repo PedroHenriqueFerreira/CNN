@@ -1,9 +1,3 @@
-import numpy as np
+from scipy import signal
 
-print(
-    np.correlate(
-        [1, 2, 3, 4, 5, 6, 7, 8, 9], 
-        [0, 1, 2, 3],
-        mode='same'
-    )
-)
+print(signal.correlate([1, 2, 3], [0, 1, 0.5], mode='same', method=''))
