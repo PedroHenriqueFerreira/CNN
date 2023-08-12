@@ -7,7 +7,7 @@ class Matrix:
     def __init__(self, rows: int, cols: int):
         ''' Initialize a matrix with the given dimensions '''
         
-        if rows <= 0 or cols <= 0:
+        if rows < 0 or cols < 0:
             raise ValueError('Invalid matrix dimensions')
         
         self.rows = rows
@@ -91,6 +91,16 @@ class Matrix:
         ''' Return the maximum value in the matrix '''
         
         return max(self.to_list())
+    
+    def index(self, value: float) -> tuple[int, int]:
+        ''' Return the index of the first occurrence of a value '''
+    
+        for i in range(self.rows):
+            for j in range(self.cols):
+                if self.data[i][j] == value:
+                    return (i, j)
+
+        raise ValueError('Value not found in matrix')
     
     def count(self) -> int:
         ''' Return the number of elements in the matrix '''
@@ -219,7 +229,7 @@ class Matrix:
         return matrix
     
     @staticmethod
-    def join(*matrices: 'Matrix') -> 'Matrix':
+    def join(matrices: list['Matrix']) -> 'Matrix':
         ''' Join matrices along the specified axis '''
         
         if len(matrices) == 0:
@@ -234,63 +244,40 @@ class Matrix:
             data.extend(matrix.data)
             
         return Matrix.load(data)
-               
+
     @staticmethod
-    def correlate(
-        base: 'Matrix', 
-        kernel: 'Matrix', 
-        stride: int = 1, 
-        mode: Literal['valid', 'same', 'full'] = 'valid'
-    ) -> 'Matrix':
-        ''' Correlate the matrix with a kernel '''
+    def correlate(base: 'Matrix', kernel: 'Matrix', stride: int = 1) -> 'Matrix':
+        ''' Correlate the matrix with a kernel with a valid padding '''
         
         if kernel.rows > base.rows or kernel.cols > base.cols:
             raise ValueError('Kernel must be smaller than the base matrix')
         
-        match mode:
-            case 'valid':
-                v_pad = (0, 0)
-                h_pad = (0, 0)
-            
-            case 'same':
-                v_total_pad = (base.rows - 1) * stride - base.rows + kernel.rows
-                h_total_pad = (base.cols - 1) * stride - base.cols + kernel.cols
-                
-                v_pad = (v_total_pad // 2, v_total_pad - v_total_pad // 2)
-                h_pad = (h_total_pad // 2, h_total_pad - h_total_pad // 2)
-                
-            case 'full':
-                v_pad = (kernel.rows - 1, kernel.rows - 1)
-                h_pad = (kernel.cols - 1, kernel.cols - 1)
-        
-        rows = (base.rows + sum(v_pad) - kernel.rows) // stride + 1
-        cols = (base.cols + sum(h_pad) - kernel.cols) // stride + 1
+        rows = (base.rows - kernel.rows) // stride + 1
+        cols = (base.cols - kernel.cols) // stride + 1
         
         matrix = Matrix(rows, cols)
         
-        base = base.expand(v_pad, h_pad)
-        
-        for i in range(matrix.rows):
-            for j in range(matrix.cols):
-                ii = i * stride
-                jj = j * stride
+        for r in range(matrix.rows):
+            row = r * stride
+            for c in range(matrix.cols):
+                col = c * stride
                 
-                base_part = [row[jj:jj + kernel.cols] for row in base.data[ii:ii + kernel.rows]]
+                base_part = base[row:row + kernel.rows, col:col + kernel.cols]
                 
-                matrix.data[i][j] = (Matrix.load(base_part) * kernel).sum()
+                matrix.data[r][c] = (base_part * kernel).sum()
         
         return matrix
     
     @staticmethod
-    def convolve(
-        base: 'Matrix', 
-        kernel: 'Matrix', 
-        stride: int = 1, 
-        mode: Literal['valid', 'same', 'full'] = 'valid'
-    ) -> 'Matrix':
-        ''' Convolve the matrix with a kernel '''
+    def convolve(base: 'Matrix', kernel: 'Matrix', stride: int = 1) -> 'Matrix':
+        ''' Convolve the matrix with a kernel with a valid padding '''
         
-        return Matrix.correlate(base, kernel.Rot180, stride, mode)
+        return Matrix.correlate(base, kernel.Rot180, stride)
+    
+    def __getitem__(self, key: tuple[slice, slice]) -> 'Matrix':
+        ''' Return a slice of the matrix '''
+    
+        return Matrix.load([row[key[1]] for row in self.data[key[0]]])
     
     @property
     def T(self) -> 'Matrix':
@@ -316,8 +303,8 @@ class Matrix:
         
         return matrix
     
-    def expand(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
-        ''' Expand the matrix by adding rows and columns '''
+    def pad(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
+        ''' Pad the matrix with zeros '''
         
         matrix = Matrix(self.rows + sum(vert), self.cols + sum(horiz))
         
@@ -327,8 +314,8 @@ class Matrix:
             
         return matrix
 
-    def compress(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
-        ''' Compress the matrix by removing rows and columns '''
+    def crop(self, vert: tuple[int, int], horiz: tuple[int, int]) -> 'Matrix':
+        ''' Crop the matrix by removing rows and columns '''
         
         matrix = Matrix(self.rows - sum(vert), self.cols - sum(horiz))
         
