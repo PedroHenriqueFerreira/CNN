@@ -293,3 +293,49 @@ class MaxPooling2D(Layer):
                 
         return input_gradient.crop2D(self.calculate_padding())
 
+class Flatten(Layer):
+    ''' Flatten layer '''
+    
+    def __init__(self, input_shape: Optional[tuple[int, ...]] = None):
+        
+        if input_shape is not None: 
+            self.set_input_shape(input_shape)
+            
+    @property
+    def output_shape(self) -> tuple[int]:
+        result = 1
+        
+        for dim in self.input_shape:
+            result *= dim
+            
+        return (result, )
+    
+    def forward(self, input_value: Matrix) -> Matrix:
+        self.batch_size = input_value.shape[0]
+    
+        return input_value.reshape(self.batch_size, *self.output_shape)
+    
+    def backward(self, output_gradient: Matrix) -> Matrix:
+        return output_gradient.reshape(self.batch_size, *self.input_shape)
+
+class Reshape(Layer):
+    ''' Reshape layer '''
+    
+    def __init__(self, shape: tuple[int, ...], input_shape: Optional[tuple[int, ...]] = None) -> None:
+        self.shape = shape
+        
+        if input_shape is not None: 
+            self.set_input_shape(input_shape)
+    
+    @property
+    def output_shape(self) -> tuple[int, ...]:
+        return self.shape
+    
+    def forward(self, input_value: Matrix) -> Matrix:
+        self.batch_size = input_value.shape[0]
+        
+        return input_value.reshape(self.batch_size, *self.shape)
+    
+    def backward(self, output_gradient: Matrix) -> Matrix:
+        return output_gradient.reshape(self.batch_size, *self.input_shape)
+
