@@ -437,3 +437,23 @@ class Matrix:
         ''' Return a string representation of the matrix '''
         
         return pformat(self.data)
+    
+    def __bool__(self) -> bool:
+        ''' Check if the matrix values are not all zero '''
+        
+        return all(value != 0 for value in self.to_array())
+    
+    def __eq__(self, other: float) -> 'Matrix': # type: ignore
+        ''' Check if the matrix values are equal to a scalar '''
+        
+        return self.map(lambda value: int(value == other))
+    
+    def __lt__(self, other: float) -> 'Matrix':
+        ''' Check if the matrix values are less than a scalar '''
+        
+        return self.map(lambda value: int(value < other))
+    
+    def __gt__(self, other: float) -> 'Matrix':
+        ''' Check if the matrix values are greater than a scalar '''
+        
+        return self.map(lambda value: int(value > other))

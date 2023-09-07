@@ -270,9 +270,9 @@ class MaxPooling2D(Layer):
                 
                 for k in range(pool_height):
                     should_break = False
-                    
+                
                     for l in range(pool_width):
-                        if selected[k : k + 1, l : l + 1].data[0][0] == value:
+                        if selected[k : k + 1, l : l + 1] == value:
                             matrix[row + k, col + l] = output[i, j]
                             should_break = True
                             break
@@ -339,3 +339,20 @@ class Reshape(Layer):
     def backward(self, output_gradient: Matrix) -> Matrix:
         return output_gradient.reshape(self.batch_size, *self.input_shape)
 
+class Dropout(Layer):
+    ''' Dropout layer '''
+    
+    def __init__(self, rate: float = 0.2) -> None:
+        self.rate = rate
+    
+    @property
+    def output_shape(self) -> tuple[int, ...]:
+        return self.input_shape
+    
+    def forward(self, input_value: Matrix) -> Matrix:
+        self.mask = input_value.randomize(0, 1) > self.rate
+        
+        return input_value * self.mask
+    
+    def backward(self, output_gradient: Matrix) -> Matrix:
+        return output_gradient * self.mask
