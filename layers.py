@@ -356,3 +356,39 @@ class Dropout(Layer):
     
     def backward(self, output_gradient: Matrix) -> Matrix:
         return output_gradient * self.mask
+
+class BatchNormalization(Layer):
+    ''' Batch normalization layer '''
+    
+    def __init__(self, momentum: float = 0.99, epsilon: float = 0.01) -> None:
+        self.momentum = momentum
+        self.epsilon = epsilon
+        
+        self.running_mean: Optional[float] = None
+        self.running_var: Optional[float] = None
+        
+    def initialize(self, optimizer: Optimizer) -> None:
+        self.gamma = Matrix(*self.input_shape).ones()
+        self.beta = Matrix(*self.input_shape).zeros()
+        
+        self.gamma_optimizer = optimizer.copy()
+        self.beta_optimizer = optimizer.copy()
+        
+    def parameters(self):
+        return self.gamma.count() + self.beta.count()
+    
+    def forward(self, input_value: Matrix) -> Matrix:
+        if self.running_mean == None or self.running_var == None:
+            self.running_mean = input_value.mean()
+            self.running_var = input_value.var()
+
+        mean = input_value.mean()
+        var = input_value.var()
+        
+        self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean # type: ignore
+        self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var # type: ignore
+        
+        std: float = (var + self.epsilon) ** 0.5
+        input_value_norm = (input_value - mean) / std
+        
+        return self.gamma * input_value_norm + self.beta # type: ignore

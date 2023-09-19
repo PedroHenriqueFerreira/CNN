@@ -158,13 +158,23 @@ class Matrix:
         
         return len(self.to_array())
     
-    def average(self):
-        ''' Calculate the average of all values in the matrix '''
+    def mean(self):
+        ''' Calculate the mean of all values in the matrix '''
         
         if self.count() == 0:
             return 0.0
         
         return self.sum() / self.count()
+
+    def var(self):
+        ''' Calculate the variance of all values in the matrix '''
+        
+        if self.count() == 0:
+            return 0.0
+        
+        mean = self.mean()
+        
+        return self.map(lambda x: (x - mean) ** 2).mean() # type: ignore
 
     def to_array(self) -> list[float]:
         ''' Convert the matrix to a list '''
