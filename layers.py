@@ -29,12 +29,12 @@ class Layer:
         
         raise NotImplementedError()
     
-    def forward(self, input_value: Matrix) -> Matrix: 
+    def forward(self, input_value: Matrix, training: bool = True) -> Matrix: 
         ''' Propagates input forward '''
         
         raise NotImplementedError()
     
-    def backward(self, output_gradient: Matrix) -> Matrix:
+    def backward(self, output_gradient: Matrix, training: bool = True) -> Matrix:
         ''' Propagates gradient backward '''
         
         raise NotImplementedError()
@@ -66,18 +66,19 @@ class Dense(Layer):
     def output_shape(self) -> tuple[int]:
         return (self.units, )
         
-    def forward(self, input_value: Matrix) -> Matrix:
+    def forward(self, input_value, training=True):
         self.input_value = input_value
-
         return self.input_value @ self.weights + self.bias
     
-    def backward(self, output_gradient: Matrix) -> Matrix:
-        weights_gradient = self.input_value.T @ output_gradient
-        bias_gradient = output_gradient.sum_by_axis(0)
+    def backward(self, output_gradient, training=True):
         input_gradient = output_gradient @ self.weights.T
         
-        self.weights = self.weights_optimizer.update(self.weights, weights_gradient)
-        self.bias = self.bias_optimizer.update(self.bias, bias_gradient)
+        if training:
+            weights_gradient = self.input_value.T @ output_gradient
+            bias_gradient = output_gradient.sum_by_axis(0)
+            
+            self.weights = self.weights_optimizer.update(self.weights, weights_gradient)
+            self.bias = self.bias_optimizer.update(self.bias, bias_gradient)
         
         return input_gradient
     
@@ -131,7 +132,7 @@ class Conv2D(Layer):
     
     @property
     def output_shape(self) -> tuple[int, int, int]:
-        channels, input_height, input_width = self.input_shape
+        _, input_height, input_width = self.input_shape
         kernel_height, kernel_width = self.kernel_shape
         
         vertical_padding, horizontal_padding = self.calculate_padding()
@@ -141,10 +142,10 @@ class Conv2D(Layer):
     
         return self.filters, output_height, output_width
     
-    def forward(self, input_value: Matrix) -> Any:
+    def forward(self, input_value, training=True):
         self.input_value = input_value.pad2D(self.calculate_padding())
         
-        batch_size, channels, input_height, input_width = self.input_value.shape
+        batch_size, channels, _, _ = self.input_value.shape
         
         output_value = Matrix(batch_size, *self.output_shape)
 
@@ -158,31 +159,37 @@ class Conv2D(Layer):
 
         return output_value
 
-    def backward(self, output_gradient: Matrix) -> Matrix:
-        kernels_gradient = Matrix(*self.kernels.shape)
+    def backward(self, output_gradient, training=True):
         input_gradient = Matrix(*self.input_value.shape)
-        bias_gradient = Matrix(*self.bias.shape)
         
-        batch_size, channels, input_height, input_width = self.input_value.shape
-        kernel_height, kernel_width = self.kernel_shape
+        batch_size, channels, _, _ = self.input_value.shape
         
-        full_padding = ((kernel_height - 1, ) * 2, (kernel_width - 1, ) * 2)
+        if training:
+            kernels_gradient = Matrix(*self.kernels.shape)
+            bias_gradient = Matrix(*self.bias.shape)
+        
+            kernel_height, kernel_width = self.kernel_shape
+        
+            full_padding = ((kernel_height - 1, ) * 2, (kernel_width - 1, ) * 2)    
         
         for b in range(batch_size):
             for f in range(self.filters):
                 output = output_gradient[b, f]
                 
-                bias_gradient[f] += output.sum()
+                if training:
+                    bias_gradient[f] += output.sum()
                 
                 for c in range(channels):
-                    input = self.input_value[b, c]
+                    if training:
+                        input = self.input_value[b, c]
+                        kernels_gradient[f, c] += input.correlate2D(output, self.stride)
+                        
                     kernel = self.kernels[f, c]
-                    
-                    kernels_gradient[f, c] += input.correlate2D(output, self.stride)
                     input_gradient[b, c] += output.pad2D(full_padding).convolve2D(kernel, self.stride)
 
-        self.kernels = self.kernels_optimizer.update(self.kernels, kernels_gradient)
-        self.bias = self.bias_optimizer.update(self.bias, bias_gradient)
+        if training:
+            self.kernels = self.kernels_optimizer.update(self.kernels, kernels_gradient)
+            self.bias = self.bias_optimizer.update(self.bias, bias_gradient)
 
         return input_gradient.crop2D(self.calculate_padding())
 
@@ -226,7 +233,7 @@ class MaxPooling2D(Layer):
     
     def pool_forward(self, input: Matrix) -> Matrix:
         pool_height, pool_width = self.pool_shape
-        channels, output_height, output_width = self.output_shape
+        _, output_height, output_width = self.output_shape
         
         matrix = Matrix(output_height, output_width)
         
@@ -240,10 +247,10 @@ class MaxPooling2D(Layer):
                 
         return matrix
     
-    def forward(self, input_value: Matrix) -> Matrix:
+    def forward(self, input_value, training=True):
         self.input_value = input_value.pad2D(self.calculate_padding())
         
-        batch_size, channels, input_height, input_width = self.input_value.shape
+        batch_size, channels, _, _ = self.input_value.shape
         
         output_value = Matrix(batch_size, *self.output_shape)
         
@@ -282,16 +289,65 @@ class MaxPooling2D(Layer):
                 
         return matrix
     
-    def backward(self, output_gradient: Matrix) -> Matrix:
+    def backward(self, output_gradient, training=True):
         input_gradient = Matrix(*self.input_value.shape)
         
-        batch_size, channels, input_height, input_width = self.input_value.shape
+        batch_size, channels, _, _ = self.input_value.shape
         
         for b in range(batch_size):
             for c in range(channels):
                 input_gradient[b, c] = self.pool_backward(output_gradient[b, c], self.input_value[b, c])
                 
         return input_gradient.crop2D(self.calculate_padding())
+
+class UpSampling2D(Layer):
+    ''' 2D up sampling layer '''
+
+    def __init__(
+        self, 
+        size: tuple[int, int] = (2, 2), 
+        input_shape: Optional[tuple[int, int, int]] = None
+    ):
+        self.size = size
+        
+        if input_shape is not None:
+            self.set_input_shape(input_shape)
+
+    @property
+    def output_shape(self) -> tuple[int, int, int]:
+        channels, input_height, input_width = self.input_shape
+        size_height, size_width = self.size
+        
+        height = input_height * size_height
+        width = input_width * size_width
+        
+        return (channels, height, width)
+
+    def forward(self, input_value, training=True):
+        return input_value.repeat2D(self.size)
+    
+    def backward(self, output_gradient, training=True):
+        batch_size, channels, _, _ = output_gradient.shape
+        _, input_height, input_width = self.input_shape
+        
+        input_gradient = Matrix(batch_size, *self.input_shape)
+        
+        size_height, size_width = self.size
+        
+        for b in range(batch_size):
+            for c in range(channels):
+                for i in range(input_height):
+                    for j in range(input_width):
+                        output = output_gradient[b, c]
+                        
+                        x = i * size_height
+                        y = j * size_width
+                        
+                        selected = output[x : x + size_height, y : y + size_width]
+                        
+                        input_gradient[b, c, i, j] = selected.sum()
+
+        return input_gradient
 
 class Flatten(Layer):
     ''' Flatten layer '''
@@ -310,13 +366,13 @@ class Flatten(Layer):
             
         return (result, )
     
-    def forward(self, input_value: Matrix) -> Matrix:
-        self.batch_size = input_value.shape[0]
+    def forward(self, input_value, training=True):
+        batch_size = input_value.shape[0]
+        return input_value.reshape(batch_size, *self.output_shape)
     
-        return input_value.reshape(self.batch_size, *self.output_shape)
-    
-    def backward(self, output_gradient: Matrix) -> Matrix:
-        return output_gradient.reshape(self.batch_size, *self.input_shape)
+    def backward(self, output_gradient, training=True):
+        batch_size = output_gradient.shape[0]
+        return output_gradient.reshape(batch_size, *self.input_shape)
 
 class Reshape(Layer):
     ''' Reshape layer '''
@@ -331,30 +387,34 @@ class Reshape(Layer):
     def output_shape(self) -> tuple[int, ...]:
         return self.shape
     
-    def forward(self, input_value: Matrix) -> Matrix:
-        self.batch_size = input_value.shape[0]
-        
-        return input_value.reshape(self.batch_size, *self.shape)
+    def forward(self, input_value, training=True):
+        batch_size = input_value.shape[0]
+        return input_value.reshape(batch_size, *self.shape)
     
-    def backward(self, output_gradient: Matrix) -> Matrix:
-        return output_gradient.reshape(self.batch_size, *self.input_shape)
+    def backward(self, output_gradient, training=True):
+        batch_size = output_gradient.shape[0]
+        return output_gradient.reshape(batch_size, *self.input_shape)
 
 class Dropout(Layer):
     ''' Dropout layer '''
     
     def __init__(self, rate: float = 0.2) -> None:
         self.rate = rate
+        self.scale = 1 / (1 - self.rate)
     
     @property
     def output_shape(self) -> tuple[int, ...]:
         return self.input_shape
     
-    def forward(self, input_value: Matrix) -> Matrix:
-        self.mask = input_value.randomize(0, 1) > self.rate
-        
-        return input_value * self.mask
+    def forward(self, input_value, training=True):
+        if training:
+            self.mask = self.scale * (input_value.randomize(0, 1) > self.rate)
+            
+            return input_value * self.mask
+        else:
+            return input_value
     
-    def backward(self, output_gradient: Matrix) -> Matrix:
+    def backward(self, output_gradient, training=True):
         return output_gradient * self.mask
 
 class BatchNormalization(Layer):
@@ -364,8 +424,8 @@ class BatchNormalization(Layer):
         self.momentum = momentum
         self.epsilon = epsilon
         
-        self.running_mean: Optional[float] = None
-        self.running_var: Optional[float] = None
+        self.running_mean: Optional[Matrix] = None
+        self.running_var: Optional[Matrix] = None
         
     def initialize(self, optimizer: Optimizer) -> None:
         self.gamma = Matrix(*self.input_shape).ones()
@@ -377,18 +437,49 @@ class BatchNormalization(Layer):
     def parameters(self):
         return self.gamma.count() + self.beta.count()
     
-    def forward(self, input_value: Matrix) -> Matrix:
-        if self.running_mean == None or self.running_var == None:
-            self.running_mean = input_value.mean()
-            self.running_var = input_value.var()
+    @property
+    def output_shape(self):
+        return self.input_shape
+    
+    def forward(self, input_value, training=True):
+        if self.running_mean is None or self.running_var is None:
+            self.running_mean = input_value.mean_by_axis(0)
+            self.running_var = input_value.var_by_axis(0)
 
-        mean = input_value.mean()
-        var = input_value.var()
+        if training and self.running_mean is not None and self.running_var is not None:
+            mean = input_value.mean_by_axis(0)
+            var = input_value.var_by_axis(0)
+            
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
+        else:
+            mean = self.running_mean
+            var = self.running_var
         
-        self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean # type: ignore
-        self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var # type: ignore
+        self.input_centered = input_value - mean
+        self.std = (var + self.epsilon) ** 0.5
         
-        std: float = (var + self.epsilon) ** 0.5
-        input_value_norm = (input_value - mean) / std
+        input_normalized = self.input_centered / self.std
         
-        return self.gamma * input_value_norm + self.beta # type: ignore
+        return self.gamma * input_normalized + self.beta
+    
+    def backward(self, output_gradient, training=True):
+        gamma = self.gamma
+        
+        if training:
+            input_normalized = self.input_centered / self.std
+            
+            gamma_gradient = (output_gradient * input_normalized).sum_by_axis(0)
+            beta_gradient = output_gradient.sum_by_axis(0)
+            
+            self.gamma = self.gamma_optimizer.update(self.gamma, gamma_gradient)
+            self.beta = self.beta_optimizer.update(self.beta, beta_gradient)
+        
+        batch_size = output_gradient.shape[0]
+        
+        return (gamma / (batch_size * self.std)) * (
+            batch_size * output_gradient 
+            - output_gradient.sum_by_axis(0) 
+            - (self.input_centered / self.std ** 2) 
+            * (output_gradient * self.input_centered).sum_by_axis(0)
+        )

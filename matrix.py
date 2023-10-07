@@ -65,6 +65,28 @@ class Matrix:
         else:
             data[key[0]] = value
     
+    def repeat2D_data(self, data: list[Any], repeats: tuple[int, int]) -> list[Any]:
+        ''' Repeat the 2D matrix data with the given repeats '''
+        
+        if isinstance(data, list):
+            if isinstance(data[0], list) and isinstance(data[0][0], float | int):
+                height = len(data) * repeats[0]
+                width = len(data[0]) * repeats[1]
+                
+                matrix = [[0] * width for _ in range(height)]
+                
+                for i in range(len(data)):
+                    for j in range(len(data[0])):
+                        for k in range(repeats[0]):
+                            for l in range(repeats[1]):
+                                matrix[i * repeats[0] + k][j * repeats[1] + l] = data[i][j]
+                
+                return matrix
+
+            return [self.repeat2D_data(items, repeats) for items in data]
+
+        return data
+    
     def pad2D_data(self, data: list[Any], padding: tuple[tuple[int, int], tuple[int, int]]) -> list[Any]:
         ''' Pad the 2D matrix data with the given padding '''
         
@@ -204,6 +226,25 @@ class Matrix:
             matrix += self[*slices, i : i + 1]
         
         return matrix
+
+    def mean_by_axis(self, axis: int) -> 'Matrix':
+        ''' Calculate the mean of all values in the matrix along the given axis '''
+            
+        return self.sum_by_axis(axis) / self.shape[axis]
+
+    def var_by_axis(self, axis: int) -> 'Matrix':
+        ''' Calculate the variance of all values in the matrix along the given axis '''
+        
+        mean = self.mean_by_axis(axis)
+        
+        matrix = Matrix(*self.shape[1:axis], 1, *self.shape[axis + 1:])
+        
+        for i in range(self.shape[0]):
+            slices = (slice(None),) * axis
+                    
+            matrix += (self[*slices, i : i + 1] - mean) ** 2
+        
+        return matrix / self.shape[axis]
 
     def operation(self, other: 'Matrix', op: Callable[[float, float], float]) -> 'Matrix':
         ''' Perform an operation on two matrices '''
@@ -352,6 +393,11 @@ class Matrix:
         ''' Crop the 2D matrices inside matrix with the given cropping '''
         
         return Matrix.load(self.crop2D_data(self.data, cropping))
+    
+    def repeat2D(self, repeats: tuple[int, int]) -> 'Matrix':
+        ''' Repeat the 2D matrices inside matrix with the given repeats '''
+        
+        return Matrix.load(self.repeat2D_data(self.data, repeats))
     
     def correlate2D(self, kernel: 'Matrix', stride: int = 1) -> 'Matrix':
         ''' Correlate the 2D matrix with the given kernel and stride '''
