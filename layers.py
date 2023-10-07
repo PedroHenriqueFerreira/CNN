@@ -1,9 +1,8 @@
-from typing import Optional, Literal, Any
-
+from typing import Optional, Literal
 from math import floor, ceil
 
+from optimizers import Optimizer
 from matrix import Matrix
-from optimizers import Optimizer, AdamOptimizer
 
 class Layer:
     ''' Abstract class for layers '''
@@ -483,3 +482,27 @@ class BatchNormalization(Layer):
             - (self.input_centered / self.std ** 2) 
             * (output_gradient * self.input_centered).sum_by_axis(0)
         )
+        
+class Activation(Layer):
+    ''' Activation layer '''
+    
+    def __call__(self, x: Matrix) -> Matrix:
+        ''' Return the activation of the matrix '''
+        
+        raise NotImplementedError()
+    
+    def gradient(self, x: Matrix) -> Matrix:
+        ''' Return the gradient of the matrix '''
+    
+        raise NotImplementedError()
+    
+    @property
+    def output_shape(self):
+        return self.input_shape
+    
+    def forward(self, input_value, training=True):
+        self.input_value = input_value
+        return self(input_value)
+    
+    def backward(self, output_gradient, training=True):
+        return output_gradient * self.gradient(self.input_value)

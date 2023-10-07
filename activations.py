@@ -1,19 +1,5 @@
-from math import exp
-
-from .matrix import Matrix
-
-class Activation:
-    ''' Base class for all activations '''
-    
-    def __call__(self, x: Matrix) -> Matrix:
-        ''' Return the activation of the matrix '''
-        
-        raise NotImplementedError()
-    
-    def gradient(self, x: Matrix) -> Matrix:
-        ''' Return the gradient of the matrix '''
-        
-        raise NotImplementedError()
+from layers import Activation
+from matrix import Matrix
 
 class Sigmoid(Activation):
     ''' Sigmoid activation class '''
@@ -46,7 +32,7 @@ class Softmax(Activation):
     ''' Softmax activation class '''
     
     def __call__(self, x: Matrix) -> Matrix:
-        return exp(x) / x.exp().sum()
+        return x.exp() / x.exp().sum()
     
     def gradient(self, x: Matrix) -> Matrix:
         return self(x) * (1 - self(x))
