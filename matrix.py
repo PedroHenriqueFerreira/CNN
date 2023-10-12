@@ -4,6 +4,8 @@ from pprint import pformat
 from math import log, exp, inf
 from random import uniform
 
+from PIL import Image
+
 class Matrix:
     def __init__(self, *shape: int):
         ''' Initialize a new matrix with the given shape '''
@@ -263,8 +265,12 @@ class Matrix:
         other_arr = other.to_array()
         
         if len(self_arr) == len(other_arr):
-            larger = self_arr
-            smaller = other_arr
+            if (sum(self.shape) >= sum(other.shape)):
+                larger = self_arr
+                smaller = other_arr
+            else:
+                larger = other_arr
+                smaller = self_arr
             
         else:
             larger = max(self_arr, other_arr, key=len)
@@ -493,6 +499,33 @@ class Matrix:
         matrix.data = data
         
         return matrix
+    
+    @staticmethod
+    def from_image(path: str) -> 'Matrix':
+        image = Image.open(path).convert('RGB')
+        data: list[int] = list(image.getdata())
+        
+        matrix = Matrix(3, image.height, image.width)
+        
+        for i in range(3):
+            for j in range(image.height):
+                for k in range(image.width):
+                    matrix[i, j, k] = data[j * image.width + k][i]
+        
+        return matrix
+    
+    def to_image(self, path: str) -> None:
+        image = Image.new('RGB', (self.shape[2], self.shape[1]))
+        
+        for j in range(self.shape[1]):
+            for i in range(self.shape[2]):
+                r = int(self.data[0][j][i])
+                g = int(self.data[1][j][i])
+                b = int(self.data[2][j][i])
+                
+                image.putpixel((i, j), (r, g, b))
+    
+        image.save(path)
     
     def __str__(self):
         ''' Return a string representation of the matrix ''' 

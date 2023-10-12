@@ -456,6 +456,7 @@ class BatchNormalization(Layer):
             var = self.running_var
         
         self.input_centered = input_value - mean
+        
         self.std = (var + self.epsilon) ** 0.5
         
         input_normalized = self.input_centered / self.std
