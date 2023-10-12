@@ -10,7 +10,7 @@ init = time()
 
 
 def generator():
-    g_optimizer = AdamOptimizer(learning_rate=0.002)
+    g_optimizer = AdamOptimizer(learning_rate=0.0005)
     g_loss = MeanSquaredLoss()
     
     g = NeuralNetwork(g_optimizer, g_loss)
@@ -29,6 +29,11 @@ def generator():
     g.add(LeakyReLU())
     g.add(BatchNormalization())
     
+    g.add(UpSampling2D())
+    g.add(Conv2D(16, (3, 3), padding='same'))
+    g.add(LeakyReLU())
+    g.add(BatchNormalization())
+    
     g.add(Conv2D(3, (3, 3), padding='same'))
     
     g.add(TanH())
@@ -38,12 +43,18 @@ def generator():
     return g
     
 def descriminator():
-    d_optimizer = AdamOptimizer(learning_rate=0.002)
+    d_optimizer = AdamOptimizer(learning_rate=0.0005)
     d_loss = CrossEntropyLoss()
     
     d = NeuralNetwork(d_optimizer, d_loss)
     
-    d.add(Conv2D(32, (3, 3), padding='same', input_shape=(3, 32, 32)))
+    d.add(Conv2D(16, (3, 3), padding='same', input_shape=(3, 64, 64)))
+    d.add(LeakyReLU())
+    d.add(MaxPooling2D((2, 2), 2))
+    d.add(BatchNormalization())
+    d.add(Dropout(0.25))
+    
+    d.add(Conv2D(32, (3, 3), padding='same'))
     d.add(LeakyReLU())
     d.add(MaxPooling2D((2, 2), 2))
     d.add(BatchNormalization())
@@ -67,8 +78,4 @@ def descriminator():
     return d
 
 d = descriminator()
-    
 g = generator()
-
-print()
-print(f'Time elapsed: {time() - init:.2f}s')

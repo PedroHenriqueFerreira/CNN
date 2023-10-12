@@ -125,6 +125,16 @@ class Matrix:
 
         return data
     
+    def split(self, size: int) -> list['Matrix']:
+        ''' Split the matrix into a list of matrices of the given size '''
+        
+        parts = self.shape[0] / size
+        
+        if int(parts) < parts:
+            parts = int(parts) + 1
+        
+        return [self[i * size : (i + 1) * size] for i in range(int(parts))]
+    
     def map(self, function: Callable[[float], float]) -> 'Matrix':
         ''' Map a function to the matrix '''
         
